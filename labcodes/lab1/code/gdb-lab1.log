@@ -1,0 +1,82 @@
+pc             0x1000	0x1000
+=> 0x1000:	auipc	t0,0x0
+   0x1004:	addi	a2,t0,40
+   0x1008:	csrr	a0,mhartid
+   0x100c:	ld	a1,32(t0)
+   0x1010:	ld	t0,24(t0)
+   0x1014:	jr	t0
+1: x/i $pc
+=> 0x1000:	auipc	t0,0x0
+0x0000000000001004 in ?? ()
+1: x/i $pc
+=> 0x1004:	addi	a2,t0,40
+pc             0x1004	0x1004
+t0             0x1000	4096
+a0             0x0	0
+a1             0x0	0
+a2             0x0	0
+0x0000000000001008 in ?? ()
+1: x/i $pc
+=> 0x1008:	csrr	a0,mhartid
+pc             0x1008	0x1008
+t0             0x1000	4096
+a0             0x0	0
+a1             0x0	0
+a2             0x1028	4136
+0x000000000000100c in ?? ()
+1: x/i $pc
+=> 0x100c:	ld	a1,32(t0)
+pc             0x100c	0x100c
+t0             0x1000	4096
+a0             0x0	0
+a1             0x0	0
+a2             0x1028	4136
+0x0000000000001010 in ?? ()
+1: x/i $pc
+=> 0x1010:	ld	t0,24(t0)
+pc             0x1010	0x1010
+t0             0x1000	4096
+a0             0x0	0
+a1             0x87000000	2264924160
+a2             0x1028	4136
+0x0000000000001014 in ?? ()
+1: x/i $pc
+=> 0x1014:	jr	t0
+pc             0x1014	0x1014
+t0             0x80000000	2147483648
+a0             0x0	0
+a1             0x87000000	2264924160
+a2             0x1028	4136
+0x0000000080000000 in ?? ()
+1: x/i $pc
+=> 0x80000000:	add	s0,a0,zero
+pc             0x80000000	0x80000000
+=> 0x80000000:	add	s0,a0,zero
+   0x80000004:	add	s1,a1,zero
+   0x80000008:	add	s2,a2,zero
+   0x8000000c:	jal	ra,0x800006a0
+   0x80000010:	add	a6,a0,zero
+   0x80000014:	add	a0,s0,zero
+   0x80000018:	add	a1,s1,zero
+   0x8000001c:	add	a2,s2,zero
+   0x80000020:	li	a7,-1
+   0x80000022:	beq	a6,a7,0x8000002a
+Breakpoint 1 at 0x80200000: file kern/init/entry.S, line 7.
+Continuing.
+
+Breakpoint 1, kern_entry () at kern/init/entry.S:7
+7	    la sp, bootstacktop
+1: x/i $pc
+=> 0x80200000 <kern_entry>:	auipc	sp,0x3
+pc             0x80200000	0x80200000 <kern_entry>
+sp             0x80017ee0	0x80017ee0
+a0             0x0	0
+a1             0x87000000	2264924160
+=> 0x80200000 <kern_entry>:	auipc	sp,0x3
+   0x80200004 <kern_entry+4>:	mv	sp,sp
+   0x80200008 <kern_entry+8>:	j	0x8020000a <kern_init>
+   0x8020000a <kern_init>:	auipc	a0,0x3
+   0x8020000e <kern_init+4>:	addi	a0,a0,-2
+   0x80200012 <kern_init+8>:	auipc	a2,0x3
+   0x80200016 <kern_init+12>:	addi	a2,a2,-10
+   0x8020001a <kern_init+16>:	addi	sp,sp,-16
