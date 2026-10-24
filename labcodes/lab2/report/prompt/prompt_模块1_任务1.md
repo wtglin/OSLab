@@ -31,107 +31,46 @@ uint64_t get_memory_size(void);
 #define KERNBASE            0xFFFFFFFFC0200000
 #define PHYSICAL_MEMORY_END         0x88000000
 #define PHYSICAL_MEMORY_OFFSET      0xFFFFFFFF40000000
-
-
 struct Page {
     int ref;                        // page frame's reference counter
     uint64_t flags;                 // array of flags that describe the status of the page frame
     unsigned int property;          // the num of free block, used in first fit pm manager
     list_entry_t page_link;         // free list link
 };
-
-#define PG_reserved                 0       // if this bit=1: the Page is reserved for kernel, cannot be used in alloc/free_pages; otherwise, this bit=0 
-#define PG_property                 1       // if this bit=1: the Page is the head page of a free memory block(contains some continuous_addrress pages), and can be used in alloc_pages; if this bit=0: if the Page is the the head page of a free memory block, then this Page and the memory block is alloced. Or this Page isn't the head page.
-
+#define PG_reserved                 0       
+#define PG_property                 1 
 #define SetPageReserved(page)       ((page)->flags |= (1UL << PG_reserved))
-#define ClearPageReserved(page)     ((page)->flags &= ~(1UL << PG_reserved))
-#define PageReserved(page)          (((page)->flags >> PG_reserved) & 1)
 ```
 
 页面大小、偏移常量(`kern\mm\mmu.h`)
 ```c
 #define PGSIZE          4096                    // bytes mapped by a page
 #define PGSHIFT         12                      // log2(PGSIZE)
-
-// physical/virtual page number of address
 #define PPN(la) (((uintptr_t)(la)) >> PGSHIFT)
 ```
 
 页相关函数与全局变量（`kern\mm\pmm.c`、`kern\mm\pmm.h`）
 ```c
 struct Page *pages;
-// amount of physical memory (in pages)
 size_t npage = 0;
-// the kernel image is mapped at VA=KERNBASE and PA=info.base
 uint64_t va_pa_offset;
-// memory starts at 0x80000000 in RISC-V
-// DRAM_BASE defined in riscv.h as 0x80000000
 const size_t nbase = DRAM_BASE / PGSIZE;
-
-// physical memory management
 const struct pmm_manager *pmm_manager;
-
-// init_memmap - call pmm->init_memmap to build Page struct for free memory
-static void init_memmap(struct Page *base, size_t n) {
-    pmm_manager->init_memmap(base, n);
-}
-
-
+static void init_memmap(struct Page *base, size_t n)
 #define PADDR(kva)                                                 \
-    ({                                                             \
-        uintptr_t __m_kva = (uintptr_t)(kva);                      \
-        if (__m_kva < KERNBASE) {                                  \
-            panic("PADDR called with invalid kva %08lx", __m_kva); \
-        }                                                          \
-        __m_kva - va_pa_offset;                                    \
-    })
-
-static inline ppn_t page2ppn(struct Page *page) { return page - pages + nbase; }
-
-static inline uintptr_t page2pa(struct Page *page) {
-    return page2ppn(page) << PGSHIFT;
-}
-
-
-static inline int page_ref(struct Page *page) { return page->ref; }
-
-static inline void set_page_ref(struct Page *page, int val) { page->ref = val; }
-
-static inline int page_ref_inc(struct Page *page) {
-    page->ref += 1;
-    return page->ref;
-}
-
-static inline int page_ref_dec(struct Page *page) {
-    page->ref -= 1;
-    return page->ref;
-}
-static inline struct Page *pa2page(uintptr_t pa) {
-    if (PPN(pa) >= npage) {
-        panic("pa2page called with invalid pa");
-    }
-    return &pages[PPN(pa) - nbase];
-}
+static inline void set_page_ref(struct Page *page, int val) 
+static inline struct Page *pa2page(uintptr_t pa) 
 ```
 
 页面对齐函数(`libs/defs.h`)
 ```c
-#define ROUNDDOWN(a, n) ({                                          \
-            size_t __a = (size_t)(a);                               \
-            (typeof(a))(__a - __a % (n));                           \
-        })
-
-/* Round up to the nearest multiple of n */
-#define ROUNDUP(a, n) ({                                            \
-            size_t __n = (size_t)(n);                               \
-            (typeof(a))(ROUNDDOWN((size_t)(a) + __n - 1, __n));     \
-        })
+#define ROUNDDOWN(a, n) 
+#define ROUNDUP(a, n) 
 ```
 
 异常终止接口`panic(...)`(`kern/debug/assert.h`)
 ```c
-#define panic(...)                                      \
-    __panic(__FILE__, __LINE__, __VA_ARGS__)
+#define panic(...)
 ```
 
 [GUARANTEE]
