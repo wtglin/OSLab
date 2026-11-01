@@ -195,7 +195,7 @@ static void page_init(void);
 
 #### 实现迭代过程
 
-本模块经过 1 次实现迭代完成，未记录具体失败日志，因此不另行补写不存在的错误过程
+本模块经过 1 次实现迭代完成
 
 ### Challenge：硬件的可用物理内存范围的获取方法
 
@@ -940,6 +940,197 @@ void slub_check(void);
 本实现体现“页级分配器 + 对象缓存”的两层思想。每个 cache 管理一种对象尺寸，多种尺寸由多个 cache 提供，并不等同于已经实现支持任意大请求的通用 `kmalloc()`。单页切分还要求对象槽能容纳链表指针，步长至少为 `ROUNDUP(max(size, sizeof(void *)), 8)`；对于零长度、超过单页容量、缓存控制块耗尽和底层页申请失败，应明确返回失败或拒绝调用。已有提示词及截图没有完整覆盖这些输入，不能认定它们都已验证。
 
 对象归还 cache 后可被复用，但物理页仍由 cache 持有。因此“对象复用成功”和“空闲页总数恢复”是两种不同性质。本次简化实现不提供空 Slab 页回收、缓存销毁或并发保护；跨页、尺寸隔离和对齐检查验证的是当前教学范围内的行为。
+
+
+### 分支任务：gdb 调试页表查询过程
+
+**负责人：** [2413115-刘卓明]
+
+本次调试将使用两个GDB会话
+- GDB会话1：使用普通的gdb命令，附加到QEMU进程本身，用于调试QEMU的源码
+- GDB会话2：使用riscv64-unknown-elf-gdb，通过QEMU提供的调试接口连接，用于调试运行在模拟器中的ucore内核
+
+这样让我们能够同时观察qemu模拟器和被模拟系统ucore两个层面上的行为，而且这种模式可以让我们先在ucore当中停下来，然后看到那条要执行的riscv指令，然后再观察在qemu中如何完成了对这条指令的解析。当前实验就是观察qemu在接收到一个访存指令的时候，是如何一步步的操作的。
+
+**调试步骤**：
+1. **终端1：启动QEMU模拟器**
+
+启动新编译的调试版QEMU，并暂停在初始状态。
+```sh
+make debug
+```
+
+2. **终端2：附加调试QEMU进程**
+
+找到QEMU进程的PID,然后启动GDB并附加到这个进程,先不打断点，继续执行qemu进程
+
+```sh
+pgrep -f qemu-system-riscv64
+sudo gdb
+(gdb) attach <刚才查到的PID>
+(gdb) handle SIGPIPE nostop noprint #遇到 SIGPIPE 时不暂停、不打印，仍按正常程序方式传递信号
+(gdb) c
+```
+
+![gdb调试1](./figures/gdb调试1.png)
+
+3. **终端3：调试ucore内核**
+
+这个GDB会话会连接到QEMU的GDB stub
+
+```sh
+make gdb
+```
+
+在内核C入口处打上断点,并执行到入口地址，查看访存指令，并单步调试到该指令
+```sh
+(gdb) b kern_init
+(gdb) c
+(gdb) x/8i $pc
+=> 0xffffffffc02000d8 <kern_init>:
+    auipc       a0,0x6
+   0xffffffffc02000dc <kern_init+4>:
+    addi        a0,a0,-192
+   0xffffffffc02000e0 <kern_init+8>:
+    auipc       a2,0x7
+   0xffffffffc02000e4 <kern_init+12>:
+    addi        a2,a2,1496
+   0xffffffffc02000e8 <kern_init+16>:
+    addi        sp,sp,-16
+   0xffffffffc02000ea <kern_init+18>:
+    sub a2,a2,a0
+   0xffffffffc02000ec <kern_init+20>:
+    li  a1,0
+   0xffffffffc02000ee <kern_init+22>:
+    sd  ra,8(sp)
+(gdb) si
+0xffffffffc02000dc      31          memset(edata, 0, end - edata);
+(gdb) si
+0xffffffffc02000e0      31          memset(edata, 0, end - edata);
+(gdb) si
+0xffffffffc02000e4      31          memset(edata, 0, end - edata);
+(gdb) si
+0xffffffffc02000e8      29      int kern_init(void) {
+(gdb) si
+0xffffffffc02000ea      31          memset(edata, 0, end - edata);
+(gdb) si
+0xffffffffc02000ec      31          memset(edata, 0, end - edata);
+(gdb) si
+0xffffffffc02000ee      29      int kern_init(void) {
+(gdb) x/i $pc
+=> 0xffffffffc02000ee <kern_init+22>:
+    sd  ra,8(sp)
+```
+
+同时记录访存的目标地址到$va
+
+```sh
+set $va = $sp + 8
+p/x $va
+```
+
+![gdb调试2](./figures/gdb调试2.png)
+
+4. 终端 2：设置三个断点
+原群中视频演示只在`get_physical_address`上打了断点，我查询源代码借助大模型了解这个函数主要功能是页表翻译，但是根据理论知识，指令的虚拟地址翻译到物理地址，应该先到tlb里找，再去页表里找，最后回填页表，然后我在大模型的帮助下查看源代码的调用路径（放在了调试任务后说明），找到了查找tlb的函数`helper_le_stq_mmu`和回填tlb的函数`tlb_set_page`于是打了三个断点
+
+第一个断点：helper_le_stq_mmu 观察 TLB 查找。
+第二个断点：get_physical_address 观察页表翻译
+第三个断点：tlb_set_page 观察 TLB 回填
+
+```sh
+set $va = <终端3打印的地址>
+b helper_le_stq_mmu if addr == $va
+b get_physical_address if addr == $va && access_type == 1 //只处理目标虚拟地址的写访问。
+b tlb_set_page if (vaddr >> 12) == ($va >> 12)  //两者属于同一个 4 KiB 虚拟页
+c
+```
+![gdb调试3](./figures/gdb调试3.png)
+
+然后在终端3上：单步调试 si
+
+终端二上到helper_le_stq_mmu()入口地址，然后进入函数，next到查找tlb的相关代码区域
+
+```
+1672        store_helper(env, addr, val, oi, retaddr, 8, false);
+(gdb) p/x addr
+$1 = 0xffffffffc0204ff8
+(gdb) step
+store_helper (env=0x5eae3918daf0, addr=18446744072637927416, 
+    val=2147486210, oi=49, retaddr=140367397650757, size=8, 
+    big_endian=false)
+    at /mnt/d/WSL/OS/RISCV/qemu-4.1.1/accel/tcg/cputlb.c:1504
+1504        uintptr_t mmu_idx = get_mmuidx(oi);
+(gdb) next
+1505        uintptr_t index = tlb_index(env, mmu_idx, addr);
+(gdb) next
+1506        CPUTLBEntry *entry = tlb_entry(env, mmu_idx, addr);
+(gdb) next
+1507        target_ulong tlb_addr = tlb_addr_write(entry);
+(gdb) next
+1508        const size_t tlb_off = offsetof(CPUTLBEntry, addr_write);
+(gdb) next
+1509        unsigned a_bits = get_alignment_bits(get_memop(oi));
+(gdb) next
+1513        if (addr & ((1 << a_bits) - 1)) {
+(gdb) next
+1519        if (!tlb_hit(tlb_addr, addr)) {
+(gdb) p/x addr
+$2 = 0xffffffffc0204ff8
+(gdb) p/x tlb_addr
+$3 = 0xffffffffffffffff
+```
+
+可以看到 addr 中是指令要写入的虚拟地址，而tlb_addr是根据该地址定位到的主 TLB 缓存项中的写访问标记 0xffffffffffffffff 该缓存项的写访问映射无效，因此`tlb_hit(tlb_addr, addr)` 将返回 false，主 TLB 查询未命中。接着跳转到页表去查询
+```
+(gdb) c
+Continuing.
+
+Thread 2 "qemu-system-ris" hit Breakpoint 2, get_physical_address (env=0x5eae3918daf0, physical=0x7fa9d4dfe260, 
+    prot=0x7fa9d4dfe254, addr=18446744072637927416, 
+    access_type=1, mmu_idx=1)
+    at /mnt/d/WSL/OS/RISCV/qemu-4.1.1/target/riscv/cpu_helper.c:
+```
+
+![gdb调试4](./figures/gdb调试4.png)
+
+
+终端二上到get_physical_address()：查页表函数入口，查看正在翻译的虚拟地址与$va相同
+```
+(gdb) p/x addr
+$4 = 0xffffffffc0204ff8
+(gdb)c
+```
+
+继续执行到回填tlb函数入口，可查看到对应的物理页地址和虚拟页地址
+```
+(gdb) p/x vaddr
+$5 = 0xffffffffc0204000
+(gdb) p/x paddr
+$6 = 0x80204000
+```
+![gdb调试5](./figures/gdb调试5.png)
+
+依据大模型分析qemu源码可得出地址转化的关键的调用路径
+```
+执行 sd 指令
+    ↓
+helper_le_stq_mmu()
+    ↓
+store_helper()：检查主 TLB 和 victim TLB
+    ↓ 都未找到映射
+tlb_fill()
+    ↓ 通过 CPUClass 回调
+riscv_cpu_tlb_fill()
+    ↓
+get_physical_address()：查页表、检查权限
+    ↓ 翻译成功
+tlb_set_page()
+    ↓
+tlb_set_page_with_attrs()：建立缓存项
+    ↓
+返回存储流程，完成写入
+```
 
 ## 五、测试与验证
 
