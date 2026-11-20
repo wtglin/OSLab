@@ -84,9 +84,6 @@ void print_regs(struct pushregs *gpr)
 extern struct mm_struct *check_mm_struct;
 
 //lab3 请补充你在lab3中的代码
-#ifndef SHUTDOWN_AFTER
-#define SHUTDOWN_AFTER 10
-#endif
 
 void interrupt_handler(struct trapframe *tf) {
     const uintptr_t interrupt_bit = (uintptr_t)1 << 63;
@@ -97,9 +94,6 @@ void interrupt_handler(struct trapframe *tf) {
         size_t count = ++ticks;
         if (count % TICK_NUM == 0) {
             print_ticks();
-            if (count / TICK_NUM == SHUTDOWN_AFTER) {
-                sbi_shutdown();
-            }
         }
         return;
     }
@@ -145,15 +139,6 @@ void exception_handler(struct trapframe *tf) {
     tf->epc += (first_halfword & 3) == 3 ? 4 : 2;
 }
 
-static inline void trap_dispatch(struct trapframe *tf) {
-    if ((intptr_t)tf->cause < 0) {
-        // interrupts
-        interrupt_handler(tf);
-    } else {
-        // exceptions
-        exception_handler(tf);
-    }
-}
 
 
 /* *

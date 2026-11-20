@@ -54,7 +54,6 @@
 
     .macro RESTORE_ALL
     #lab3:填写你在lab3中实现的代码
-    
     LOAD s0, 32*REGBYTES(sp)
     LOAD s1, 33*REGBYTES(sp)
     csrw sstatus, s0
@@ -91,7 +90,6 @@
     LOAD x30, 30*REGBYTES(sp)
     LOAD x31, 31*REGBYTES(sp)
     LOAD x2, 2*REGBYTES(sp)
-
     .endm
 
     .globl __alltraps
@@ -103,7 +101,6 @@ __alltraps:
     mv a0, sp
     call trap
     mv sp, s0
-
     # sp should be the same as before "jal trap"
 
     .globl __trapret

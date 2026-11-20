@@ -1,8 +1,10 @@
 #include <pmm.h>
 #include <list.h>
+#include <default_pmm.h>
 #include <stdio.h>
 
 //lab2 请补充你在lab2中的代码
+
 static free_area_t free_area;
 
 #define free_list (free_area.free_list)
@@ -130,7 +132,7 @@ best_fit_nr_free_pages(void) {
     return nr_free;
 }
 
-const struct pmm_manager best_fit_pmm_manager = {
+const struct pmm_manager default_pmm_manager = {
     .name = "best_fit_pmm_manager",
     .init = best_fit_init,
     .init_memmap = best_fit_init_memmap,
@@ -139,7 +141,6 @@ const struct pmm_manager best_fit_pmm_manager = {
     .nr_free_pages = best_fit_nr_free_pages,
     .check = best_fit_check,
 };
-
 
 // Framework tests: students must not modify basic_check or best_fit_check.
 static void

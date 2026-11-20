@@ -88,6 +88,7 @@ size_t nr_free_pages(void)
 }
 
 //lab2 请补充你在lab2中的代码
+
 static void page_init(void) {
     extern char end[];
     uint64_t mem_base = get_memory_base();
@@ -103,24 +104,22 @@ static void page_init(void) {
             "range [0x%016lx, 0x%016lx)\n",
             mem_base, mem_size, mem_base, mem_end);
 
-    // The kernel's direct mapping ends at KERNTOP; both limits here are PAs.
-    const uint64_t mapped_end_pa = KERNTOP - PHYSICAL_MEMORY_OFFSET;
-    uint64_t managed_end = mem_end < mapped_end_pa ? mem_end : mapped_end_pa;
+    // Keep descriptors and free pages within the configured memory limit.
+    va_pa_offset = PHYSICAL_MEMORY_OFFSET;
+    uintptr_t map_end = PADDR(KERNTOP);
+    uint64_t managed_end = mem_end < map_end ? mem_end : map_end;
     managed_end = ROUNDDOWN(managed_end, PGSIZE);
     if (managed_end <= mem_base) {
         panic("no complete physical page in the managed range");
     }
 
-    va_pa_offset = PHYSICAL_MEMORY_OFFSET;
-    // Describe only complete pages in the direct-mapped DRAM range.
     npage = PPN(managed_end);
     size_t page_count = npage - nbase;
 
     // pages is a virtual pointer; all space checks below use physical addresses.
     pages = (struct Page *)ROUNDUP((uintptr_t)end, PGSIZE);
     uintptr_t pages_pa = PADDR(pages);
-    if (pages_pa < KERNBASE - PHYSICAL_MEMORY_OFFSET ||
-        pages_pa > managed_end ||
+    if (pages_pa < PADDR(KERNBASE) || pages_pa > managed_end ||
         page_count > (managed_end - pages_pa) / sizeof(struct Page)) {
         panic("kernel and page descriptors exceed managed memory");
     }
